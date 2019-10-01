@@ -1,0 +1,8 @@
+[flake8]
+ignore = E501, W503, E203
+exclude =
+    .git,
+    .github,
+    __pycache__,
+    server/settings,
+    server/factories/__init__.py
