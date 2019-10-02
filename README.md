@@ -16,6 +16,27 @@ $ pip install django-auto-rebase
 $ dar [app-name] [migration-file-to-be-rebased]
 ```
 
+## Example Usage
+1. First, because you're a good team player, before pushing to your repo, you
+   first run makemigrations --dry-run --check to make sure you're not causing
+   any migration conflicts
+```bash
+$ python manage.py makemigrations --dry-run --check
+CommandError: Conflicting migrations detected; multiple leaf nodes in the migration graph: (0006_auto_20191002_1512, 0006_auto_20191001_1001 in my_app_name).
+To fix them run 'python manage.py makemigrations --merge'
+```
+
+2. Uh, oh - looks like we have a merge conflict.  We can fix that!
+```bash
+$ dar my_app_name 0006_auto_20191002_1512  #  this is the file to be rebased
+```
+
+3. End result
+    * 0006_auto_20191002_1512.py will be renamed to 0007_auto_20191002_1512.py.
+    * 0007_auto_20191002_1512 will depend on 0006_auto_20191001_1001.
+    * If you specified the 0006_auto_20191001_1001 file in the command above, the
+      reverse would have happened.
+
 ## Requirements
 * Python 3.7 (for now. file an issue if you need an earlier version supported)
 * Django 2.2 (earlier versions will likely work, but it's untested for now.
