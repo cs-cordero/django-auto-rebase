@@ -52,8 +52,8 @@ app that you need to add to your `INSTALLED_APPS` or call through a `manage.py`.
 
 ### How does it find the root Django path?
 The first thing the script does after parsing your arguments is it walks up
-the current working directory until it finds the `manage.py` file that all if
-not most Django applications have.  The folder that holds the first
+the current working directory until it finds the `manage.py` file that most if
+not all Django applications have.  The folder that holds the first
 `manage.py` directory is appended to `sys.path`.
 
 ### Why do you even need this?
