@@ -5,12 +5,9 @@ from contextlib import chdir
 from pathlib import Path
 
 
-PROJECT = "testproject"
-
-
 def test_basic(tmpdir):
     tmpdir = Path(tmpdir)
-    src = Path(__file__).parent / PROJECT
+    src = Path(__file__).parent / "testproject_basic"
     shutil.copytree(src, tmpdir, dirs_exist_ok=True)
     with chdir(tmpdir):
         res = subprocess.run(
