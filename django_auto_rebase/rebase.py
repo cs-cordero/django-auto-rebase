@@ -1,13 +1,13 @@
+import argparse
+import inspect
 import os
 import re
 import sys
-from argparse import ArgumentParser
-from importlib import import_module
 from pathlib import Path
-from typing import Any, Dict
+from typing import List, NamedTuple
 
 import django
-from django.apps import apps
+from django.db.migrations import Migration
 from django.db.migrations.loader import MigrationLoader
 
 DEPENDENCIES_PATTERN = re.compile(
@@ -15,40 +15,66 @@ DEPENDENCIES_PATTERN = re.compile(
 )
 
 
+class MigrationTuple(NamedTuple):
+    app_label: str
+    name: str
+
+
 def main() -> None:
     args = get_arguments()
     set_pythonpath()
     django.setup()
 
-    app = apps.get_app_config(args.app)
+    loader = MigrationLoader(connection=None)
+    leaf_nodes = [
+        MigrationTuple(app_label, migration_name)
+        for app_label, migration_name in loader.graph.leaf_nodes()
+        if app_label == args.app
+    ]
+    if len(leaf_nodes) < 2:
+        print("No migrations to rebase")
+        sys.exit(0)
+    elif len(leaf_nodes) > 2:
+        sys.exit("Too many leaf nodes")
+    assert len(leaf_nodes) == 2
+    remote_migration = MigrationTuple(args.app, args.migration)
+    leaf_nodes.remove(remote_migration)
+    local_migration = leaf_nodes[0]
 
-    migrations = get_leaf_node_migrations_for_app(app)
-    original_migration = migrations.pop(args.migration)
-    [base_migration_name] = migrations.keys()
+    remote_migration_class = loader.get_migration(*remote_migration)
+    validate_simple_dependencies(remote_migration_class)
 
-    validate_simple_dependencies(original_migration, app.label)
+    migrations_to_rebase = find_migrations_to_rebase(
+        loader, local_migration, remote_migration
+    )
+    head_migration = local_migration
+    for migration in migrations_to_rebase:
+        migration_class = loader.get_migration(*migration)
+        migration_path = Path(inspect.getfile(migration_class.__class__))
+        new_migration_name = get_new_migration_name(head_migration.name, migration.name)
+        updated_path = migration_path.parent / f"{new_migration_name}.py"
 
-    original_path = Path(original_migration.__file__)
-    new_migration_name = get_new_migration_name(base_migration_name, args.migration)
-    updated_path = original_path.parent / f"{new_migration_name}.py"
+        with migration_path.open("r") as f:
+            original_contents = f.read()
 
-    with original_path.open("r") as f:
-        original_contents = f.read()
+        match = DEPENDENCIES_PATTERN.match(original_contents)
+        if match is None:
+            sys.exit(f"Regex failed on {migration.app_label}.{migration.name}")
+        before, after = match.groups()
+        middle = (
+            f"dependencies = [('{head_migration.app_label}', '{head_migration.name}')]"
+        )
 
-    match = DEPENDENCIES_PATTERN.match(original_contents)
-    assert match is not None, "Regex failed."
-    before, after = match.groups()
-    middle = f"dependencies = [('{app.label}', '{base_migration_name}')]"
+        migration_path.rename(updated_path)
+        with updated_path.open("w") as f:
+            f.write(f"{before}{middle}{after}")
 
-    original_path.rename(updated_path)
-    with updated_path.open("w") as f:
-        f.write(f"{before}{middle}{after}")
-
-    run_black_if_available(updated_path)
+        run_black_if_available(updated_path)
+        head_migration = migration._replace(name=new_migration_name)
 
 
-def get_arguments():
-    parser = ArgumentParser(
+def get_arguments() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
         description="Automatically rebase conflicting Django migrations on top of each other"
     )
     parser.add_argument("app", help="The app_label of the two conflicting migrations")
@@ -59,7 +85,7 @@ def get_arguments():
     return parser.parse_args()
 
 
-def set_pythonpath():
+def set_pythonpath() -> None:
     path = Path().absolute()
     root = Path(Path().root)
     while path != root and not (path / "manage.py").is_file():
@@ -71,39 +97,33 @@ def set_pythonpath():
     sys.path.append(str(path))
 
 
-def get_leaf_node_migrations_for_app(app: Any) -> Dict[str, Any]:
-    migration_graph = MigrationLoader(None).graph
-    leaf_migrations = {
-        migration_name: import_module(f"{app.name}.migrations.{migration_name}")
-        for app_name, migration_name in migration_graph.leaf_nodes()
-        if app_name == app.label
-    }
-
-    if not leaf_migrations:
-        raise Exception(f"Found no migrations for app {app.name}.")
-
-    count = len(leaf_migrations)
-    if count > 2:
-        raise Exception(f"Too many leaf nodes found for app {app.name}! Found {count}.")
-
-    return leaf_migrations
+def find_migrations_to_rebase(
+    loader: MigrationLoader,
+    local_migration: MigrationTuple,
+    remote_migration: MigrationTuple,
+) -> List[MigrationTuple]:
+    local_plan = loader.graph.forwards_plan(local_migration)
+    remote_plan = loader.graph.forwards_plan(remote_migration)
+    for i, (lm, rm) in enumerate(zip(local_plan, remote_plan)):
+        if lm != rm:
+            return list(map(MigrationTuple._make, remote_plan[i:]))
+    return list(map(MigrationTuple._make, remote_plan[len(local_plan) :]))
 
 
 def get_new_migration_name(base_name: str, original_name: str) -> str:
-    _, original = original_name.split("_", 1)
-    base_magic_number, *_ = base_name.split("_")
+    _, _, original = original_name.partition("_")
+    base_magic_number, _, _ = base_name.partition("_")
     new_magic_number = str(int(base_magic_number) + 1).zfill(4)
     return f"{new_magic_number}_{original}"
 
 
-def validate_simple_dependencies(migration_module: Any, app_label: str) -> None:
-    migration_class = getattr(migration_module, "Migration")
-    dependencies = getattr(migration_class, "dependencies", None)
+def validate_simple_dependencies(migration: Migration) -> None:
+    dependencies = getattr(migration, "dependencies", None)
     if dependencies is None:
         raise Exception(
             f"The migration file is missing a `dependencies` attribute for its Migration class."
         )
-    if len(dependencies) > 1 or dependencies[0][0] != app_label:
+    if len(dependencies) > 1 or dependencies[0][0] != migration.app_label:
         raise Exception(
             f"Dependency tree is more complicated than usual, you may need to manually edit this one"
         )
