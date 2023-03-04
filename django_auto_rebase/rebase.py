@@ -54,8 +54,7 @@ def main() -> None:
         new_migration_name = get_new_migration_name(head_migration.name, migration.name)
         updated_path = migration_path.parent / f"{new_migration_name}.py"
 
-        with migration_path.open("r") as f:
-            original_contents = f.read()
+        original_contents = migration_path.read_text()
 
         match = DEPENDENCIES_PATTERN.match(original_contents)
         if match is None:
@@ -66,8 +65,7 @@ def main() -> None:
         )
 
         migration_path.rename(updated_path)
-        with updated_path.open("w") as f:
-            f.write(f"{before}{middle}{after}")
+        updated_path.write_text(f"{before}{middle}{after}")
 
         run_black_if_available(updated_path)
         head_migration = migration._replace(name=new_migration_name)
