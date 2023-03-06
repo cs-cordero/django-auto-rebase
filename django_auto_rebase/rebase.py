@@ -4,15 +4,16 @@ import os
 import re
 import sys
 from pathlib import Path
-from typing import List, NamedTuple
+from typing import List, NamedTuple, Tuple
 
 import django
 from django.db.migrations import Migration
 from django.db.migrations.loader import MigrationLoader
 
-DEPENDENCIES_PATTERN = re.compile(
-    r"(.*?)dependencies.*?=.*?\[.*?\](.*)", re.MULTILINE | re.DOTALL
-)
+if sys.version_info < (3, 9):
+    from typing import Iterable
+else:
+    from collections.abc import Iterable
 
 
 class MigrationTuple(NamedTuple):
@@ -41,33 +42,46 @@ def main() -> None:
     leaf_nodes.remove(remote_migration)
     local_migration = leaf_nodes[0]
 
-    remote_migration_class = loader.get_migration(*remote_migration)
-    validate_simple_dependencies(remote_migration_class)
-
-    migrations_to_rebase = find_migrations_to_rebase(
+    base_migrations, migrations_to_rebase = find_migrations_to_rebase(
         loader, local_migration, remote_migration
     )
+    if not base_migrations:
+        sys.exit("The given migrations don't have a common base")
+    assert len(base_migrations) == 1
+    base_migration = base_migrations[0]
     head_migration = local_migration
     for migration in migrations_to_rebase:
         migration_class = loader.get_migration(*migration)
         migration_path = Path(inspect.getfile(migration_class.__class__))
         new_migration_name = get_new_migration_name(head_migration.name, migration.name)
-        updated_path = migration_path.parent / f"{new_migration_name}.py"
+        new_path = migration_path.parent / f"{new_migration_name}.py"
 
         original_contents = migration_path.read_text()
 
-        match = DEPENDENCIES_PATTERN.match(original_contents)
-        if match is None:
-            sys.exit(f"Regex failed on {migration.app_label}.{migration.name}")
-        before, after = match.groups()
-        middle = (
-            f"dependencies = [('{head_migration.app_label}', '{head_migration.name}')]"
+        dependencies_pattern = re.compile(
+            rf"""
+            (
+                (['"])
+                {base_migration.app_label}
+                \2
+                ,
+                \s*
+                (['"])
+            )
+            {base_migration.name}
+            \3
+            """,
+            re.MULTILINE | re.VERBOSE,
+        )
+        new_contents = dependencies_pattern.sub(
+            rf"\g<1>{head_migration.name}\g<3>", original_contents
         )
 
-        migration_path.rename(updated_path)
-        updated_path.write_text(f"{before}{middle}{after}")
+        migration_path.rename(new_path)
+        new_path.write_text(new_contents)
 
-        run_black_if_available(updated_path)
+        run_black_if_available(new_path)
+        base_migration = migration
         head_migration = migration._replace(name=new_migration_name)
 
 
@@ -99,13 +113,20 @@ def find_migrations_to_rebase(
     loader: MigrationLoader,
     local_migration: MigrationTuple,
     remote_migration: MigrationTuple,
-) -> List[MigrationTuple]:
+) -> Tuple[List[MigrationTuple], List[MigrationTuple]]:
     local_plan = loader.graph.forwards_plan(local_migration)
     remote_plan = loader.graph.forwards_plan(remote_migration)
     for i, (lm, rm) in enumerate(zip(local_plan, remote_plan)):
         if lm != rm:
-            return list(map(MigrationTuple._make, remote_plan[i:]))
-    return list(map(MigrationTuple._make, remote_plan[len(local_plan) :]))
+            return (make_tuples(remote_plan[i - 1 : i]), make_tuples(remote_plan[i:]))
+    return (
+        make_tuples(remote_plan[len(local_plan) - 1 : len(local_plan)]),
+        make_tuples(remote_plan[len(local_plan) :]),
+    )
+
+
+def make_tuples(xs: Iterable[Tuple[str, str]]) -> List[MigrationTuple]:
+    return list(map(MigrationTuple._make, xs))
 
 
 def get_new_migration_name(base_name: str, original_name: str) -> str:
@@ -113,18 +134,6 @@ def get_new_migration_name(base_name: str, original_name: str) -> str:
     base_magic_number, _, _ = base_name.partition("_")
     new_magic_number = str(int(base_magic_number) + 1).zfill(4)
     return f"{new_magic_number}_{original}"
-
-
-def validate_simple_dependencies(migration: Migration) -> None:
-    dependencies = getattr(migration, "dependencies", None)
-    if dependencies is None:
-        raise Exception(
-            f"The migration file is missing a `dependencies` attribute for its Migration class."
-        )
-    if len(dependencies) > 1 or dependencies[0][0] != migration.app_label:
-        raise Exception(
-            f"Dependency tree is more complicated than usual, you may need to manually edit this one"
-        )
 
 
 def run_black_if_available(filepath: Path) -> None:
