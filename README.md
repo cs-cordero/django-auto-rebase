@@ -38,8 +38,8 @@ $ dar my_app_name 0006_auto_20191002_1512  #  this is the file to be rebased
       reverse would have happened.
 
 ## Requirements
-* Python 3.7 (for now. file an issue if you need an earlier version supported)
-* Django 2.2 (earlier versions will likely work, but it's untested for now.
+* Python 3.8 or later
+* Django 2.2.8 or later
 
 ## Limitations
 * Only works on leaf nodes that have migration conflicts.
