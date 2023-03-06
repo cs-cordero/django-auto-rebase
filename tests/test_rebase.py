@@ -37,8 +37,7 @@ def test_nothing_to_do(tmpdir, is_settings_module_set):
     with chdir(tmpdir):
         res = subprocess.run(
             ["python", "manage.py", "makemigrations", "--check"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
             text=True,
         )
         assert (
@@ -54,8 +53,7 @@ def test_nothing_to_do(tmpdir, is_settings_module_set):
                 if is_settings_module_set
                 else None
             ),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
             text=True,
         )
         assert (
@@ -118,8 +116,7 @@ def test_basic(tmpdir):
     with chdir(tmpdir):
         res = subprocess.run(
             ["python", "manage.py", "makemigrations", "--check"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
             text=True,
         )
         assert (
@@ -145,8 +142,7 @@ def test_basic(tmpdir):
 
         res = subprocess.run(
             ["python", "manage.py", "makemigrations", "--check"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
             text=True,
         )
         assert (
@@ -236,8 +232,7 @@ def test_multiple_migrations(tmpdir):
     with chdir(tmpdir):
         res = subprocess.run(
             ["python", "manage.py", "makemigrations", "--check"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
             text=True,
         )
         assert (
@@ -264,8 +259,7 @@ def test_multiple_migrations(tmpdir):
 
         res = subprocess.run(
             ["python", "manage.py", "makemigrations", "--check"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
             text=True,
         )
         assert (
