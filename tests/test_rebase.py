@@ -127,6 +127,8 @@ def test_basic(tmpdir):
             and (
                 "(0002_alter_reporter_full_name, 0002_reporter_handle in testapp)"
                 in res.stderr
+                or "(0002_reporter_handle, 0002_alter_reporter_full_name in testapp)"
+                in res.stderr
             )
             and res.returncode > 0
         )
@@ -242,6 +244,8 @@ def test_multiple_migrations(tmpdir):
             "Conflicting migrations detected" in res.stderr
             and (
                 "(0002_alter_reporter_full_name, 0003_reporter_level in testapp)"
+                in res.stderr
+                or "(0003_reporter_level, 0002_alter_reporter_full_name in testapp)"
                 in res.stderr
             )
             and res.returncode > 0
