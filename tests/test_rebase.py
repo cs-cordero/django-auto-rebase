@@ -1,7 +1,7 @@
 import os
 import shutil
 import subprocess
-from contextlib import chdir
+from contextlib import AbstractContextManager
 from pathlib import Path
 
 import pytest
@@ -288,3 +288,18 @@ def test_multiple_migrations(tmpdir):
             'dependencies = [("testapp", "0003_reporter_handle")]'
             in level_migration.read_text()
         )
+
+
+class chdir(AbstractContextManager):
+    """Non thread-safe context manager to change the current working directory."""
+
+    def __init__(self, path):
+        self.path = path
+        self._old_cwd = []
+
+    def __enter__(self):
+        self._old_cwd.append(os.getcwd())
+        os.chdir(self.path)
+
+    def __exit__(self, *excinfo):
+        os.chdir(self._old_cwd.pop())
