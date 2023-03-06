@@ -12,7 +12,6 @@ keywords = ["django", "Django", "migrations"]
 
 [tool.poetry.dependencies]
 python = "^3.8"
-Django = ">=2.2.8"
 
 [tool.poetry.group.dev.dependencies]
 flake8 = [
