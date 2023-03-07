@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import List, NamedTuple, Tuple
 
 import django
-from django.db.migrations import Migration
+from django.db.migrations.graph import MigrationGraph
 from django.db.migrations.loader import MigrationLoader
 
 if sys.version_info < (3, 9):
@@ -27,11 +27,7 @@ def main() -> None:
     django.setup()
 
     loader = MigrationLoader(connection=None)
-    leaf_nodes = [
-        MigrationTuple(app_label, migration_name)
-        for app_label, migration_name in loader.graph.leaf_nodes()
-        if app_label == args.app
-    ]
+    leaf_nodes = filter_migrations(args.app, loader.graph.leaf_nodes())
     if len(leaf_nodes) < 2:
         print("No migrations to rebase")
         sys.exit(0)
@@ -43,7 +39,7 @@ def main() -> None:
     local_migration = leaf_nodes[0]
 
     base_migrations, migrations_to_rebase = find_migrations_to_rebase(
-        loader, local_migration, remote_migration
+        loader.graph, local_migration, remote_migration
     )
     if not base_migrations:
         sys.exit("The given migrations don't have a common base")
@@ -110,23 +106,27 @@ def set_pythonpath() -> None:
 
 
 def find_migrations_to_rebase(
-    loader: MigrationLoader,
+    graph: MigrationGraph,
     local_migration: MigrationTuple,
     remote_migration: MigrationTuple,
 ) -> Tuple[List[MigrationTuple], List[MigrationTuple]]:
-    local_plan = loader.graph.forwards_plan(local_migration)
-    remote_plan = loader.graph.forwards_plan(remote_migration)
+    assert local_migration.app_label == remote_migration.app_label
+    app = remote_migration.app_label
+    local_plan = filter_migrations(app, graph.forwards_plan(local_migration))
+    remote_plan = filter_migrations(app, graph.forwards_plan(remote_migration))
     for i, (lm, rm) in enumerate(zip(local_plan, remote_plan)):
         if lm != rm:
-            return (make_tuples(remote_plan[i - 1 : i]), make_tuples(remote_plan[i:]))
+            return (remote_plan[i - 1 : i], remote_plan[i:])
     return (
-        make_tuples(remote_plan[len(local_plan) - 1 : len(local_plan)]),
-        make_tuples(remote_plan[len(local_plan) :]),
+        remote_plan[len(local_plan) - 1 : len(local_plan)],
+        remote_plan[len(local_plan) :],
     )
 
 
-def make_tuples(xs: Iterable[Tuple[str, str]]) -> List[MigrationTuple]:
-    return list(map(MigrationTuple._make, xs))
+def filter_migrations(
+    app_label: str, migrations: Iterable[Tuple[str, str]]
+) -> List[MigrationTuple]:
+    return [MigrationTuple(app, name) for app, name in migrations if app == app_label]
 
 
 def get_new_migration_name(base_name: str, original_name: str) -> str:
