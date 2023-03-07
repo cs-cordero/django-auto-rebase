@@ -34,51 +34,47 @@ def main() -> None:
     elif len(leaf_nodes) > 2:
         sys.exit("Too many leaf nodes")
     assert len(leaf_nodes) == 2
-    remote_migration = MigrationTuple(args.app, args.migration)
-    leaf_nodes.remove(remote_migration)
-    local_migration = leaf_nodes[0]
+    remote = MigrationTuple(args.app, args.migration)
+    leaf_nodes.remove(remote)
+    local = leaf_nodes[0]
 
-    base_migrations, migrations_to_rebase = find_migrations_to_rebase(
-        loader.graph, local_migration, remote_migration
-    )
-    if not base_migrations:
+    bases, migrations_to_rebase = find_migrations_to_rebase(loader.graph, local, remote)
+    if not bases:
         sys.exit("The given migrations don't have a common base")
-    assert len(base_migrations) == 1
-    base_migration = base_migrations[0]
-    head_migration = local_migration
+    assert len(bases) == 1
+    base = bases[0]
+    head = local
     for migration in migrations_to_rebase:
-        migration_class = loader.get_migration(*migration)
-        migration_path = Path(inspect.getfile(migration_class.__class__))
-        new_migration_name = get_new_migration_name(head_migration.name, migration.name)
-        new_path = migration_path.parent / f"{new_migration_name}.py"
+        migration_obj = loader.get_migration(*migration)
+        migration_path = Path(inspect.getfile(migration_obj.__class__))
+        new_name = get_new_migration_name(head.name, migration.name)
+        new_path = migration_path.parent / f"{new_name}.py"
 
-        original_contents = migration_path.read_text()
-
+        orig_contents = migration_path.read_text()
         dependencies_pattern = re.compile(
             rf"""
             (
                 (['"])
-                {base_migration.app_label}
+                {base.app_label}
                 \2
                 ,
                 \s*
                 (['"])
             )
-            {base_migration.name}
+            {base.name}
             \3
             """,
             re.MULTILINE | re.VERBOSE,
         )
-        new_contents = dependencies_pattern.sub(
-            rf"\g<1>{head_migration.name}\g<3>", original_contents
-        )
+        new_contents = dependencies_pattern.sub(rf"\g<1>{head.name}\3", orig_contents)
 
         migration_path.rename(new_path)
         new_path.write_text(new_contents)
 
         run_black_if_available(new_path)
-        base_migration = migration
-        head_migration = migration._replace(name=new_migration_name)
+
+        base = migration
+        head = migration._replace(name=new_name)
 
 
 def get_arguments() -> argparse.Namespace:
@@ -106,14 +102,12 @@ def set_pythonpath() -> None:
 
 
 def find_migrations_to_rebase(
-    graph: MigrationGraph,
-    local_migration: MigrationTuple,
-    remote_migration: MigrationTuple,
+    graph: MigrationGraph, local: MigrationTuple, remote: MigrationTuple
 ) -> Tuple[List[MigrationTuple], List[MigrationTuple]]:
-    assert local_migration.app_label == remote_migration.app_label
-    app = remote_migration.app_label
-    local_plan = filter_migrations(app, graph.forwards_plan(local_migration))
-    remote_plan = filter_migrations(app, graph.forwards_plan(remote_migration))
+    assert local.app_label == remote.app_label
+    app_label = remote.app_label
+    local_plan = filter_migrations(app_label, graph.forwards_plan(local))
+    remote_plan = filter_migrations(app_label, graph.forwards_plan(remote))
     for i, (lm, rm) in enumerate(zip(local_plan, remote_plan)):
         if lm != rm:
             return (remote_plan[i - 1 : i], remote_plan[i:])
