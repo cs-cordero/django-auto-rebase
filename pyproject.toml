@@ -9,6 +9,10 @@ homepage = "https://github.com/cs-cordero/django-auto-rebase"
 repository = "https://github.com/cs-cordero/django-auto-rebase"
 documentation = "https://github.com/cs-cordero/django-auto-rebase"
 keywords = ["django", "Django", "migrations"]
+include = [
+    { path = "tests/", format = "sdist" },
+    { path = "CHANGES.md", format = "sdist" },
+]
 
 [tool.poetry.dependencies]
 python = "^3.8"
