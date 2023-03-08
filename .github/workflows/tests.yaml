@@ -50,3 +50,34 @@ jobs:
       - run: poetry run pip install --pre 'django${{ matrix.django }}'
       - run: poetry install --no-interaction --with=dev
       - run: poetry run pytest -vv
+
+  style:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - run: pipx install poetry==1.4.0
+      - name: Set up Python 3.8
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.8
+          cache: 'poetry'
+      - run: poetry install --no-interaction --only=dev
+      - run: poetry run pre-commit run --all-files
+
+  typing:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - run: pipx install poetry==1.4.0
+      - name: Set up Python 3.8
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.8
+          cache: 'poetry'
+      - name: Cache mypy
+        uses: actions/cache@v3
+        with:
+          path: ./.mypy_cache
+          key: mypy-3.8-${{ hashFiles('pyproject.toml') }}
+      - run: poetry install --no-interaction --with=dev
+      - run: poetry run mypy
