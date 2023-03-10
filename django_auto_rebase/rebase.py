@@ -1,7 +1,7 @@
 import argparse
 import inspect
-import os
 import re
+import subprocess
 import sys
 from pathlib import Path
 from typing import List, NamedTuple, Tuple
@@ -134,7 +134,7 @@ def run_black_if_available(filepath: Path) -> None:
     try:
         import black  # type: ignore # noqa: F401
 
-        os.system(f"black {filepath}")
+        subprocess.run(["black", filepath])
     except ImportError:
         pass
 
