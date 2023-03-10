@@ -45,6 +45,7 @@ def main() -> None:
     base = bases[0]
     head = local
     for migration in migrations_to_rebase:
+        print(f"Rebasing {migration.app_label}.{migration.name}")
         migration_obj = loader.get_migration(*migration)
         migration_path = Path(inspect.getfile(migration_obj.__class__))
         new_name = get_new_migration_name(head.name, migration.name)

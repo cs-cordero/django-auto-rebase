@@ -56,9 +56,15 @@ def test_basic(tmpdir):
             and res.returncode > 0
         )
 
-        subprocess.check_call(
+        res = subprocess.run(
             ["dar", "testapp", "0002_reporter_handle"],
             env={**os.environ, "DJANGO_SETTINGS_MODULE": "testproject.settings"},
+            capture_output=True,
+            text=True,
+        )
+        assert (
+            res.stdout == "Rebasing testapp.0002_reporter_handle\n"
+            and res.returncode == 0
         )
 
         res = subprocess.run(
@@ -108,9 +114,15 @@ def test_multiple_dependencies(tmpdir):
             and res.returncode > 0
         )
 
-        subprocess.check_call(
+        res = subprocess.run(
             ["dar", "testapp", "0002_alter_reporter_full_name"],
             env={**os.environ, "DJANGO_SETTINGS_MODULE": "testproject.settings"},
+            capture_output=True,
+            text=True,
+        )
+        assert (
+            res.stdout == "Rebasing testapp.0002_alter_reporter_full_name\n"
+            and res.returncode == 0
         )
 
         res = subprocess.run(
@@ -162,9 +174,16 @@ def test_multiple_migrations(tmpdir):
             and res.returncode > 0
         )
 
-        subprocess.check_call(
+        res = subprocess.run(
             ["dar", "testapp", "0003_reporter_level"],
             env={**os.environ, "DJANGO_SETTINGS_MODULE": "testproject.settings"},
+            capture_output=True,
+            text=True,
+        )
+        assert (
+            res.stdout == "Rebasing testapp.0002_reporter_handle\n"
+            "Rebasing testapp.0003_reporter_level\n"
+            and res.returncode == 0
         )
 
         res = subprocess.run(
