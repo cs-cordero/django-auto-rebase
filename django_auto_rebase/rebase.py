@@ -105,15 +105,13 @@ def get_arguments() -> argparse.Namespace:
 
 
 def set_pythonpath() -> None:
-    path = Path().absolute()
-    root = Path(Path().root)
-    while path != root and not (path / "manage.py").is_file():
-        path = path.parent
-
-    if path == root:
-        raise Exception("Could not locate the root of a git project.")
-
-    sys.path.append(str(path))
+    path = Path("manage.py").absolute()
+    for parent in path.parents:
+        if (parent / "manage.py").is_file():
+            sys.path.append(str(parent))
+            break
+    else:
+        sys.exit("Could not locate manage.py")
 
 
 def find_migrations_to_rebase(

@@ -5,6 +5,22 @@ from contextlib import chdir
 from pathlib import Path
 
 
+def test_no_manage_py(tmpdir):
+    tmpdir = Path(tmpdir)
+    with chdir(tmpdir):
+        res = subprocess.run(
+            ["dar", "testapp", "0001_initial"],
+            env={**os.environ, "DJANGO_SETTINGS_MODULE": "testproject.settings"},
+            capture_output=True,
+            text=True,
+        )
+        assert (
+            res.stderr == "Could not locate manage.py\n"
+            and res.stdout == ""
+            and res.returncode == 1
+        )
+
+
 def test_nothing_to_do(tmpdir):
     tmpdir = Path(tmpdir)
     src = Path(__file__).parent / "testproject_initial"
