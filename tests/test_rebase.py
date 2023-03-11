@@ -36,6 +36,54 @@ def test_nothing_to_do(tmpdir):
         )
 
 
+def test_validation(tmpdir):
+    tmpdir = Path(tmpdir)
+    src = Path(__file__).parent / "testproject_basic"
+    shutil.copytree(src, tmpdir, dirs_exist_ok=True)
+    with chdir(tmpdir):
+        res = subprocess.run(
+            ["python", "manage.py", "makemigrations", "--check"],
+            capture_output=True,
+            text=True,
+        )
+        assert (
+            "Conflicting migrations detected" in res.stderr
+            and (
+                "(0002_alter_reporter_full_name, 0002_reporter_handle in testapp)"
+                in res.stderr
+                or "(0002_reporter_handle, 0002_alter_reporter_full_name in testapp)"
+                in res.stderr
+            )
+            and res.returncode > 0
+        )
+
+        res = subprocess.run(
+            ["dar", "testapp", "9999_unknown_migration"],
+            env={**os.environ, "DJANGO_SETTINGS_MODULE": "testproject.settings"},
+            capture_output=True,
+            text=True,
+        )
+        assert (
+            res.stderr == "Migration testapp.9999_unknown_migration doesn't exist\n"
+            and res.stdout == ""
+            and res.returncode == 1
+        )
+
+        res = subprocess.run(
+            ["dar", "testapp", "0001_initial"],
+            env={**os.environ, "DJANGO_SETTINGS_MODULE": "testproject.settings"},
+            capture_output=True,
+            text=True,
+        )
+        assert (
+            res.stderr
+            == "Migration testapp.0001_initial is not a leaf node. Possible rebase candidates:\n"
+            "- testapp.0002_alter_reporter_full_name\n"
+            "- testapp.0002_reporter_handle\n"
+            and res.returncode == 1
+        )
+
+
 def test_basic(tmpdir):
     tmpdir = Path(tmpdir)
     src = Path(__file__).parent / "testproject_basic"

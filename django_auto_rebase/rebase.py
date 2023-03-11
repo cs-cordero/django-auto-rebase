@@ -20,6 +20,9 @@ class MigrationTuple(NamedTuple):
     app_label: str
     name: str
 
+    def __str__(self):
+        return f"{self.app_label}.{self.name}"
+
 
 def main() -> None:
     args = get_arguments()
@@ -27,6 +30,9 @@ def main() -> None:
     django.setup()
 
     loader = MigrationLoader(connection=None)
+    remote = MigrationTuple(args.app, args.migration)
+    if remote not in loader.graph.nodes:
+        sys.exit(f"Migration {remote} doesn't exist")
     leaf_nodes = filter_migrations(args.app, loader.graph.leaf_nodes())
     if len(leaf_nodes) < 2:
         print("No migrations to rebase")
@@ -34,8 +40,16 @@ def main() -> None:
     elif len(leaf_nodes) > 2:
         sys.exit("Too many leaf nodes")
     assert len(leaf_nodes) == 2
-    remote = MigrationTuple(args.app, args.migration)
-    leaf_nodes.remove(remote)
+    try:
+        leaf_nodes.remove(remote)
+    except ValueError:
+        print(
+            f"Migration {remote} is not a leaf node. Possible rebase candidates:",
+            file=sys.stderr,
+        )
+        for node in sorted(leaf_nodes):
+            print(f"- {node}", file=sys.stderr)
+        sys.exit(1)
     local = leaf_nodes[0]
 
     bases, migrations_to_rebase = find_migrations_to_rebase(loader.graph, local, remote)
@@ -45,7 +59,7 @@ def main() -> None:
     base = bases[0]
     head = local
     for migration in migrations_to_rebase:
-        print(f"Rebasing {migration.app_label}.{migration.name}")
+        print(f"Rebasing {migration}")
         migration_obj = loader.get_migration(*migration)
         migration_path = Path(inspect.getfile(migration_obj.__class__))
         new_name = get_new_migration_name(head.name, migration.name)
