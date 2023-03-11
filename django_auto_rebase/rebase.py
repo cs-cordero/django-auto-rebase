@@ -103,12 +103,12 @@ def main() -> None:
 
 def get_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Automatically rebase conflicting Django migrations on top of each other"
+        description="Automatically rebase conflicting Django migrations on top of each other."
     )
-    parser.add_argument("app", help="The app_label of the two conflicting migrations")
+    parser.add_argument("app", help="the app_label of the two conflicting migrations")
     parser.add_argument(
         "migration",
-        help="The name of the migration that will be rebased on top of the other conflicting migration.",
+        help="the name of the migration that will be rebased on top of the other conflicting migration",
     )
     return parser.parse_args()
 
