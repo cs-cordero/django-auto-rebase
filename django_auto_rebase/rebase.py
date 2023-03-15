@@ -1,10 +1,11 @@
 import argparse
 import inspect
+import os
 import re
 import subprocess
 import sys
 from pathlib import Path
-from typing import List, NamedTuple, Tuple
+from typing import List, NamedTuple, Optional, Tuple
 
 import django
 from django.db.migrations.graph import MigrationGraph
@@ -26,7 +27,15 @@ class MigrationTuple(NamedTuple):
 
 def main() -> None:
     args = get_arguments()
-    set_pythonpath()
+
+    manage_py_path = find_manage_py()
+    if manage_py_path is None:
+        sys.exit("Could not locate manage.py")
+    sys.path.append(str(manage_py_path.parent))
+    if not os.environ.get("DJANGO_SETTINGS_MODULE"):
+        settings_module = guess_settings_module(manage_py_path)
+        if settings_module:
+            os.environ["DJANGO_SETTINGS_MODULE"] = settings_module
     django.setup()
 
     loader = MigrationLoader(connection=None)
@@ -104,14 +113,28 @@ def get_arguments() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def set_pythonpath() -> None:
+def find_manage_py() -> Optional[Path]:
     path = Path("manage.py").absolute()
     for parent in path.parents:
-        if (parent / "manage.py").is_file():
-            sys.path.append(str(parent))
-            break
-    else:
-        sys.exit("Could not locate manage.py")
+        path = parent / "manage.py"
+        if path.is_file():
+            return path
+    return None
+
+
+def guess_settings_module(manage_py_path: Path) -> Optional[str]:
+    manage_py_contents = manage_py_path.read_text()
+    mo = re.search(
+        r"""
+        environ\.setdefault\(
+            ['"]DJANGO_SETTINGS_MODULE['"],\s*
+            ['"]([^'"]+)['"]
+        \)
+        """,
+        manage_py_contents,
+        re.VERBOSE | re.MULTILINE,
+    )
+    return mo.group(1) if mo else None
 
 
 def find_migrations_to_rebase(

@@ -4,6 +4,8 @@ import subprocess
 from contextlib import chdir
 from pathlib import Path
 
+import pytest
+
 
 def test_no_manage_py(tmpdir):
     tmpdir = Path(tmpdir)
@@ -21,7 +23,14 @@ def test_no_manage_py(tmpdir):
         )
 
 
-def test_nothing_to_do(tmpdir):
+@pytest.mark.parametrize(
+    "is_settings_module_set",
+    [
+        pytest.param(True, id="DJANGO_SETTINGS_MODULE is explicitly set"),
+        pytest.param(False, id="DJANGO_SETTINGS_MODULE is guessed"),
+    ],
+)
+def test_nothing_to_do(tmpdir, is_settings_module_set):
     tmpdir = Path(tmpdir)
     src = Path(__file__).parent / "testproject_initial"
     shutil.copytree(src, tmpdir, dirs_exist_ok=True)
@@ -40,7 +49,11 @@ def test_nothing_to_do(tmpdir):
 
         res = subprocess.run(
             ["dar", "testapp", "0001_initial"],
-            env={**os.environ, "DJANGO_SETTINGS_MODULE": "testproject.settings"},
+            env=(
+                {**os.environ, "DJANGO_SETTINGS_MODULE": "testproject.settings"}
+                if is_settings_module_set
+                else None
+            ),
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
@@ -75,7 +88,6 @@ def test_validation(tmpdir):
 
         res = subprocess.run(
             ["dar", "testapp", "9999_unknown_migration"],
-            env={**os.environ, "DJANGO_SETTINGS_MODULE": "testproject.settings"},
             capture_output=True,
             text=True,
         )
@@ -87,7 +99,6 @@ def test_validation(tmpdir):
 
         res = subprocess.run(
             ["dar", "testapp", "0001_initial"],
-            env={**os.environ, "DJANGO_SETTINGS_MODULE": "testproject.settings"},
             capture_output=True,
             text=True,
         )
@@ -122,7 +133,6 @@ def test_basic(tmpdir):
 
         res = subprocess.run(
             ["dar", "testapp", "0002_reporter_handle"],
-            env={**os.environ, "DJANGO_SETTINGS_MODULE": "testproject.settings"},
             capture_output=True,
             text=True,
         )
@@ -180,7 +190,6 @@ def test_multiple_dependencies(tmpdir):
 
         res = subprocess.run(
             ["dar", "testapp", "0002_alter_reporter_full_name"],
-            env={**os.environ, "DJANGO_SETTINGS_MODULE": "testproject.settings"},
             capture_output=True,
             text=True,
         )
@@ -240,7 +249,6 @@ def test_multiple_migrations(tmpdir):
 
         res = subprocess.run(
             ["dar", "testapp", "0003_reporter_level"],
-            env={**os.environ, "DJANGO_SETTINGS_MODULE": "testproject.settings"},
             capture_output=True,
             text=True,
         )
