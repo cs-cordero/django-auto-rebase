@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "django-auto-rebase"
-version = "1.0.0"
+version = "1.1.0"
 description = ""
 license = "GPL-3.0"
 authors = ["Christopher Cordero <ccordero@protonmail.com>"]
@@ -9,20 +9,36 @@ homepage = "https://github.com/cs-cordero/django-auto-rebase"
 repository = "https://github.com/cs-cordero/django-auto-rebase"
 documentation = "https://github.com/cs-cordero/django-auto-rebase"
 keywords = ["django", "Django", "migrations"]
+include = [
+    { path = "tests/", format = "sdist" },
+    { path = "CHANGES.md", format = "sdist" },
+]
 
 [tool.poetry.dependencies]
-python = "^3.6"
-Django = "^2.2"
+python = "^3.8"
 
-[tool.poetry.dev-dependencies]
-flake8 = "^3.7"
-mypy = "^0.730.0"
-black = {version = "^18.3-alpha.0", allows-prereleases = true}
-isort = "^4.3"
+[tool.poetry.group.dev.dependencies]
+mypy = "^1.0.1"
+pytest = "^7.2.2"
+pre-commit = "^3.1.1"
 
 [tool.poetry.scripts]
 dar = "django_auto_rebase.rebase:main"
 
 [build-system]
-requires = ["poetry>=0.12"]
-build-backend = "poetry.masonry.api"
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.isort]
+profile = "black"
+
+[tool.mypy]
+python_version = "3.8"
+files = ["django_auto_rebase"]
+warn_return_any = true
+warn_unused_configs = true
+warn_redundant_casts = true
+
+[[tool.mypy.overrides]]
+module = "django.*"
+ignore_missing_imports = true
